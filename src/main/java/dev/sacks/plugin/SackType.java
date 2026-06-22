@@ -32,7 +32,6 @@ public enum SackType {
         Material.COOKED_COD, Material.COOKED_SALMON,
         Material.INK_SAC, Material.GLOW_INK_SAC,
         Material.NAUTILUS_SHELL, Material.HEART_OF_THE_SEA,
-        Material.FISHING_ROD, Material.STRING, Material.BONE,
         Material.LEATHER, Material.SADDLE, Material.STICK, Material.BOWL
     }),
     COMBAT("Combat Sack", ChatColor.RED, new Material[]{
