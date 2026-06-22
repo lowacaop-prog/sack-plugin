@@ -1,0 +1,18 @@
+name: Sacks
+version: 1.0.0
+main: dev.sacks.plugin.SacksPlugin
+api-version: 1.20
+author: SacksDev
+description: Hypixel-style sacks that auto-collect items
+commands:
+  sack:
+    description: Give yourself a sack
+    usage: /sack <foraging|mining|farming|fishing|combat|digger>
+    permission: sacks.give
+permissions:
+  sacks.give:
+    description: Allows giving sacks
+    default: op
+  sacks.use:
+    description: Allows using sacks
+    default: true

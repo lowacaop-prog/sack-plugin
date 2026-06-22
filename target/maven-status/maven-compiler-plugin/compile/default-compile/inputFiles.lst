@@ -1,0 +1,7 @@
+/workspaces/sack-plugin/src/main/java/dev/sacks/plugin/SackCommand.java
+/workspaces/sack-plugin/src/main/java/dev/sacks/plugin/SackGUI.java
+/workspaces/sack-plugin/src/main/java/dev/sacks/plugin/SackItem.java
+/workspaces/sack-plugin/src/main/java/dev/sacks/plugin/SackListener.java
+/workspaces/sack-plugin/src/main/java/dev/sacks/plugin/SackManager.java
+/workspaces/sack-plugin/src/main/java/dev/sacks/plugin/SackType.java
+/workspaces/sack-plugin/src/main/java/dev/sacks/plugin/SacksPlugin.java
