@@ -1,3 +1,5 @@
+/workspaces/sack-plugin/src/main/java/dev/sacks/plugin/BagCommand.java
+/workspaces/sack-plugin/src/main/java/dev/sacks/plugin/BagOfSacks.java
 /workspaces/sack-plugin/src/main/java/dev/sacks/plugin/SackCommand.java
 /workspaces/sack-plugin/src/main/java/dev/sacks/plugin/SackGUI.java
 /workspaces/sack-plugin/src/main/java/dev/sacks/plugin/SackItem.java

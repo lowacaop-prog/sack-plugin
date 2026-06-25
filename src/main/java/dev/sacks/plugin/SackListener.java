@@ -215,6 +215,47 @@ public class SackListener implements Listener {
         }
     }
 
+    @EventHandler(priority = EventPriority.HIGHEST)
+    public void onBagClick(InventoryClickEvent event) {
+        if (!(event.getWhoClicked() instanceof Player player)) return;
+        String title = event.getView().getTitle();
+        if (!title.equals(BagOfSacks.getTitle())) return;
+        event.setCancelled(true);
+
+        if (event.getClickedInventory() == null) return;
+        // Handle clicks from player inventory — putting sack into bag
+        if (event.getClickedInventory() == player.getInventory()) {
+            ItemStack clicked = event.getCurrentItem();
+            if (clicked == null) return;
+            SackType type = SackItem.getSackType(clicked);
+            if (type == null) { player.sendMessage(org.bukkit.ChatColor.RED + "Only sacks can go in the bag!"); return; }
+            // Check if already stored
+            if (SacksPlugin.getInstance().getBagOfSacks().hasSackInBag(player.getUniqueId(), type)) {
+                player.sendMessage(org.bukkit.ChatColor.RED + "You already have a " + type.getDisplayName() + " stored!");
+                return;
+            }
+            // Store it
+            SacksPlugin.getInstance().getBagOfSacks().storeSack(player.getUniqueId(), type);
+            clicked.setAmount(clicked.getAmount() - 1);
+            player.sendMessage(type.getColor() + "✔ " + type.getDisplayName() + org.bukkit.ChatColor.GREEN + " stored in your bag!");
+            plugin.getServer().getScheduler().runTaskLater(plugin, () ->
+                player.openInventory(SacksPlugin.getInstance().getBagOfSacks().buildGUI(player)), 1L);
+            return;
+        }
+
+        // Handle clicks in bag GUI — taking sack out
+        ItemStack clicked = event.getCurrentItem();
+        if (clicked == null) return;
+        SackType type = SackItem.getSackType(clicked);
+        if (type == null) return; // clicked placeholder or filler
+        // Give sack back to player
+        SacksPlugin.getInstance().getBagOfSacks().removeSack(player.getUniqueId(), type);
+        player.getInventory().addItem(SackItem.create(type, player.getUniqueId()));
+        player.sendMessage(type.getColor() + "✔ " + type.getDisplayName() + org.bukkit.ChatColor.GREEN + " removed from bag!");
+        plugin.getServer().getScheduler().runTaskLater(plugin, () ->
+            player.openInventory(SacksPlugin.getInstance().getBagOfSacks().buildGUI(player)), 1L);
+    }
+
     private void showActionBar(Player player, SackType type, Material mat, int amount) {
         player.spigot().sendMessage(net.md_5.bungee.api.ChatMessageType.ACTION_BAR,
             new net.md_5.bungee.api.chat.TextComponent(
@@ -224,7 +265,8 @@ public class SackListener implements Listener {
         for (ItemStack item : player.getInventory().getContents()) {
             if (SackItem.getSackType(item) == type) return true;
         }
-        return false;
+        // Also check bag
+        return SacksPlugin.getInstance().getBagOfSacks().hasSackInBag(player.getUniqueId(), type);
     }
     private int countFit(Player player, Material mat, int wanted) {
         int space = 0;
@@ -242,3 +284,4 @@ public class SackListener implements Listener {
         return sb.toString().trim();
     }
 }
+// BAG_APPEND_MARKER
