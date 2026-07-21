@@ -7,7 +7,7 @@ description: sacks that auto-collect items
 commands:
   sack:
     description: Give yourself a sack
-    usage: /sack <foraging|mining|farming|fishing|combat|digger>
+    usage: /sack <foraging|mining|farming|fishing|combat|digger> [player]
     permission: sacks.give
   bas:
     description: Open your Bag of Sacks

@@ -40,7 +40,7 @@ public class SackListener implements Listener {
         for (SackType type : SackType.values()) {
             if (!type.accepts(mat)) continue;
             if (!hasSack(player, type)) continue;
-            int added = plugin.getSackManager().addItem(player.getUniqueId(), type, mat, drop.getAmount());
+            int added = plugin.getSackManager().addItem(player.getUniqueId(), type, mat, drop.getAmount(), getCapacity(player, type));
             if (added > 0) {
                 showActionBar(player, type, mat, added);
                 if (added >= drop.getAmount()) {
@@ -65,7 +65,7 @@ public class SackListener implements Listener {
             for (SackType type : SackType.values()) {
                 if (!type.accepts(drop.getType())) continue;
                 if (!hasSack(player, type)) continue;
-                int added = plugin.getSackManager().addItem(player.getUniqueId(), type, drop.getType(), drop.getAmount());
+                int added = plugin.getSackManager().addItem(player.getUniqueId(), type, drop.getType(), drop.getAmount(), getCapacity(player, type));
                 if (added > 0) {
                     showActionBar(player, type, drop.getType(), added);
                     if (added >= drop.getAmount()) toRemove.add(drop);
@@ -85,7 +85,7 @@ public class SackListener implements Listener {
         ItemStack drop = caughtItem.getItemStack();
         if (!hasSack(player, SackType.FISHING)) return;
         if (!SackType.FISHING.accepts(drop.getType())) return;
-        int added = plugin.getSackManager().addItem(player.getUniqueId(), SackType.FISHING, drop.getType(), drop.getAmount());
+        int added = plugin.getSackManager().addItem(player.getUniqueId(), SackType.FISHING, drop.getType(), drop.getAmount(), getCapacity(player, SackType.FISHING));
         if (added > 0) {
             showActionBar(player, SackType.FISHING, drop.getType(), added);
             caughtItem.remove();
@@ -196,13 +196,14 @@ public class SackListener implements Listener {
     private void insertAll(Player player, SackType type) {
         PlayerInventory inv = player.getInventory();
         int totalAdded = 0;
+        int capacity = getCapacity(player, type);
         Map<Material, Integer> addedByMat = new LinkedHashMap<>();
         for (int i = 0; i < inv.getSize(); i++) {
             ItemStack slot = inv.getItem(i);
             if (slot == null || slot.getType() == Material.AIR) continue;
             if (SackItem.getSackType(slot) != null) continue;
             if (!type.accepts(slot.getType())) continue;
-            int added = plugin.getSackManager().addItem(player.getUniqueId(), type, slot.getType(), slot.getAmount());
+            int added = plugin.getSackManager().addItem(player.getUniqueId(), type, slot.getType(), slot.getAmount(), capacity);
             if (added > 0) {
                 totalAdded += added;
                 addedByMat.merge(slot.getType(), added, Integer::sum);
@@ -261,9 +262,17 @@ public class SackListener implements Listener {
             case HOTBAR_SWAP:
             case HOTBAR_MOVE_AND_READD: {
                 if (clickedInv == top) {
-                    int hotbarButton = event.getHotbarButton();
-                    ItemStack hotbarItem = hotbarButton >= 0 ? player.getInventory().getItem(hotbarButton) : null;
-                    if (hotbarItem != null && hotbarItem.getType() != Material.AIR && SackItem.getSackType(hotbarItem) == null) {
+                    ItemStack incoming;
+                    if (event.getClick() == ClickType.SWAP_OFFHAND) {
+                        // Pressing F over a bag slot swaps with the off-hand item, but
+                        // getHotbarButton() returns -1 for this click type, so it was
+                        // never being checked - letting any off-hand item into the bag.
+                        incoming = player.getInventory().getItemInOffHand();
+                    } else {
+                        int hotbarButton = event.getHotbarButton();
+                        incoming = hotbarButton >= 0 ? player.getInventory().getItem(hotbarButton) : null;
+                    }
+                    if (incoming != null && incoming.getType() != Material.AIR && SackItem.getSackType(incoming) == null) {
                         event.setCancelled(true);
                         player.sendMessage(ChatColor.RED + "Only sacks can go in the bag!");
                     }
@@ -309,6 +318,9 @@ public class SackListener implements Listener {
         }
         // Sacks stored in the Bag of Sacks still passively collect
         return SacksPlugin.getInstance().getBagOfSacks().hasSackOfType(player.getUniqueId(), type);
+    }
+    private int getCapacity(Player player, SackType type) {
+        return plugin.getSackManager().getCapacity(player, type);
     }
     private int countFit(Player player, Material mat, int wanted) {
         int space = 0;

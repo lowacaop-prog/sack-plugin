@@ -2,6 +2,8 @@ package dev.sacks.plugin;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.Material;
+import org.bukkit.entity.Player;
+import org.bukkit.inventory.ItemStack;
 import java.io.File;
 import java.io.IOException;
 import java.util.*;
@@ -11,7 +13,7 @@ public class SackManager {
     private FileConfiguration data;
     // playerUUID -> sackType -> material -> amount
     private final Map<UUID, Map<SackType, Map<Material, Integer>>> sackData = new HashMap<>();
-    public static final int MAX_PER_ITEM = 10000;
+    public static final int MAX_PER_ITEM = 10000; // capacity granted by a single sack of a type
     public SackManager(SacksPlugin plugin) {
         this.plugin = plugin;
         dataFile = new File(plugin.getDataFolder(), "sacks.yml");
@@ -28,11 +30,24 @@ public class SackManager {
     public int getTotalItems(UUID uuid, SackType type) {
         return getSack(uuid, type).values().stream().mapToInt(Integer::intValue).sum();
     }
-    // Returns how many were actually added
-    public int addItem(UUID uuid, SackType type, Material material, int amount) {
+    // Total storage capacity for one material - scales with how many sacks of this
+    // type the player owns, counting both their inventory and their Bag of Sacks.
+    // This is the single source of truth for capacity, used both when adding items
+    // and when displaying "Stored: X / Y" in the withdrawal GUI - keeping the two in sync.
+    public int getCapacity(Player player, SackType type) {
+        int count = 0;
+        for (ItemStack item : player.getInventory().getContents()) {
+            if (SackItem.getSackType(item) == type) count += item.getAmount();
+        }
+        count += SacksPlugin.getInstance().getBagOfSacks().countSacksOfType(player.getUniqueId(), type);
+        return MAX_PER_ITEM * Math.max(count, 1);
+    }
+    // Returns how many were actually added. capacity is the total cap for this material
+    // (MAX_PER_ITEM * number of sacks of this type the player owns).
+    public int addItem(UUID uuid, SackType type, Material material, int amount, int capacity) {
         Map<Material, Integer> sack = getSack(uuid, type);
         int current = sack.getOrDefault(material, 0);
-        int canAdd = Math.min(amount, MAX_PER_ITEM - current);
+        int canAdd = Math.min(amount, capacity - current);
         if (canAdd <= 0) return 0;
         sack.put(material, current + canAdd);
         save(uuid);

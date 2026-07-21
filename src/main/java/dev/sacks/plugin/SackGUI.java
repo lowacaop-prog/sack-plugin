@@ -17,6 +17,7 @@ public class SackGUI {
         String title = GUI_TITLE_PREFIX + type.getColor() + type.getDisplayName();
         Inventory inv = Bukkit.createInventory(null, 54, title);
         SackManager manager = SacksPlugin.getInstance().getSackManager();
+        int capacity = manager.getCapacity(player, type);
         List<Material> items = new ArrayList<>(type.getItems());
         Collections.sort(items, Comparator.comparing(Material::name));
         int slot = 0;
@@ -28,7 +29,7 @@ public class SackGUI {
             meta.setDisplayName(ChatColor.YELLOW + formatName(mat.name()));
             meta.getPersistentDataContainer().set(GUI_ITEM_KEY, PersistentDataType.BYTE, (byte) 1);
             List<String> lore = new ArrayList<>();
-            lore.add(ChatColor.GRAY + "Stored: " + ChatColor.WHITE + amount + ChatColor.GRAY + " / " + SackManager.MAX_PER_ITEM);
+            lore.add(ChatColor.GRAY + "Stored: " + ChatColor.WHITE + amount + ChatColor.GRAY + " / " + capacity);
             lore.add("");
             if (amount > 0) {
                 lore.add(ChatColor.GREEN + "Left-click to withdraw 1 stack (64)");

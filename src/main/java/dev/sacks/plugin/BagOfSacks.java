@@ -63,14 +63,20 @@ public class BagOfSacks {
         persist(uuid);
     }
 
+    /** How many sacks of this type the player has stored in their bag. */
+    public int countSacksOfType(UUID uuid, SackType type) {
+        ItemStack[] contents = storedContents.get(uuid);
+        if (contents == null) return 0;
+        int count = 0;
+        for (ItemStack item : contents) {
+            if (item != null && SackItem.getSackType(item) == type) count += item.getAmount();
+        }
+        return count;
+    }
+
     /** Whether the player has at least one sack of this type stored in their bag. */
     public boolean hasSackOfType(UUID uuid, SackType type) {
-        ItemStack[] contents = storedContents.get(uuid);
-        if (contents == null) return false;
-        for (ItemStack item : contents) {
-            if (item != null && SackItem.getSackType(item) == type) return true;
-        }
-        return false;
+        return countSacksOfType(uuid, type) > 0;
     }
 
     private void persist(UUID uuid) {
