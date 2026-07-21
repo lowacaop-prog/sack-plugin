@@ -9,7 +9,6 @@ public class BagCommand implements CommandExecutor {
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         if (!(sender instanceof Player player)) { sender.sendMessage(ChatColor.RED + "Only players can use this."); return true; }
         if (!player.hasPermission("sacks.use")) { player.sendMessage(ChatColor.RED + "No permission."); return true; }
-        SacksPlugin.getInstance().getBagOfSacks().buildGUI(player);
         player.openInventory(SacksPlugin.getInstance().getBagOfSacks().buildGUI(player));
         return true;
     }

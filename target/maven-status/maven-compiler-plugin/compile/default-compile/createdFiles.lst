@@ -5,5 +5,7 @@ dev/sacks/plugin/SackType.class
 dev/sacks/plugin/SackItem.class
 dev/sacks/plugin/BagCommand.class
 dev/sacks/plugin/SackListener.class
+dev/sacks/plugin/BagOfSacks$BagHolder.class
 dev/sacks/plugin/SacksPlugin.class
 dev/sacks/plugin/BagOfSacks.class
+dev/sacks/plugin/SackListener$1.class

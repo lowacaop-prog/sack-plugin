@@ -6,13 +6,13 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityDeathEvent;
-import org.bukkit.event.entity.EntityPickupItemEvent;
 import org.bukkit.event.inventory.ClickType;
 import org.bukkit.event.inventory.InventoryAction;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.event.inventory.InventoryDragEvent;
 import org.bukkit.event.inventory.InventoryType;
+import org.bukkit.event.player.PlayerAttemptPickupItemEvent;
 import org.bukkit.event.player.PlayerFishEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.block.Action;
@@ -25,7 +25,7 @@ public class SackListener implements Listener {
     public static final Map<UUID, SackType> openSacks = new HashMap<>();
     private final Set<UUID> reopening = new HashSet<>();
 
-    // Whitelist of the ONLY actions we process — everything else is cancelled
+    // Whitelist of the ONLY actions we process - everything else is cancelled
     private static final Set<ClickType> ALLOWED_CLICKS = new HashSet<>(Arrays.asList(
         ClickType.LEFT, ClickType.RIGHT
     ));
@@ -33,8 +33,8 @@ public class SackListener implements Listener {
     public SackListener(SacksPlugin plugin) { this.plugin = plugin; }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
-    public void onItemPickup(EntityPickupItemEvent event) {
-        if (!(event.getEntity() instanceof Player player)) return;
+    public void onItemPickup(PlayerAttemptPickupItemEvent event) {
+        Player player = event.getPlayer();
         ItemStack drop = event.getItem().getItemStack();
         Material mat = drop.getType();
         for (SackType type : SackType.values()) {
@@ -96,7 +96,12 @@ public class SackListener implements Listener {
     public void onRightClick(PlayerInteractEvent event) {
         if (event.getAction() != Action.RIGHT_CLICK_AIR && event.getAction() != Action.RIGHT_CLICK_BLOCK) return;
         Player player = event.getPlayer();
-        ItemStack item = player.getInventory().getItemInMainHand();
+        // Check whichever hand actually triggered the interaction - previously this always
+        // read the main hand, so a sack held in the off-hand was never recognized and vanilla
+        // would let you place/break it as a block.
+        ItemStack item = event.getHand() == org.bukkit.inventory.EquipmentSlot.OFF_HAND
+            ? player.getInventory().getItemInOffHand()
+            : player.getInventory().getItemInMainHand();
         SackType type = SackItem.getSackType(item);
         if (type == null) return;
         event.setCancelled(true);
@@ -131,7 +136,7 @@ public class SackListener implements Listener {
         if (!openSacks.containsKey(uuid)) return;
         if (!event.getView().getTitle().startsWith(SackGUI.GUI_TITLE_PREFIX)) return;
 
-        // Always cancel first — no exceptions
+        // Always cancel first - no exceptions
         event.setCancelled(true);
 
         // Clear cursor if player somehow has an item on it
@@ -140,7 +145,7 @@ public class SackListener implements Listener {
             player.getInventory().addItem(event.getCursor());
         }
 
-        // Only allow plain left/right click — block shift, hotbar, drop, middle, double, etc
+        // Only allow plain left/right click - block shift, hotbar, drop, middle, double, etc
         if (!ALLOWED_CLICKS.contains(event.getClick())) return;
 
         // Only process clicks inside the GUI (top inventory), not player's own inventory
@@ -215,45 +220,82 @@ public class SackListener implements Listener {
         }
     }
 
+    // Bag of Sacks: an 18-slot free-form inventory that only ever accepts sack items.
+    // We don't lock every click down like the withdrawal GUI does - players can freely
+    // rearrange, shift-click, and drag sacks around - we just block anything non-sack
+    // from ever landing inside the top (bag) inventory.
     @EventHandler(priority = EventPriority.HIGHEST)
     public void onBagClick(InventoryClickEvent event) {
         if (!(event.getWhoClicked() instanceof Player player)) return;
-        String title = event.getView().getTitle();
-        if (!title.equals(BagOfSacks.getTitle())) return;
-        event.setCancelled(true);
+        Inventory top = event.getView().getTopInventory();
+        if (!(top.getHolder() instanceof BagOfSacks.BagHolder)) return;
 
-        if (event.getClickedInventory() == null) return;
-        // Handle clicks from player inventory — putting sack into bag
-        if (event.getClickedInventory() == player.getInventory()) {
-            ItemStack clicked = event.getCurrentItem();
-            if (clicked == null) return;
-            SackType type = SackItem.getSackType(clicked);
-            if (type == null) { player.sendMessage(org.bukkit.ChatColor.RED + "Only sacks can go in the bag!"); return; }
-            // Check if already stored
-            if (SacksPlugin.getInstance().getBagOfSacks().hasSackInBag(player.getUniqueId(), type)) {
-                player.sendMessage(org.bukkit.ChatColor.RED + "You already have a " + type.getDisplayName() + " stored!");
+        Inventory clickedInv = event.getClickedInventory();
+        InventoryAction action = event.getAction();
+
+        switch (action) {
+            case PLACE_ALL:
+            case PLACE_SOME:
+            case PLACE_ONE:
+            case SWAP_WITH_CURSOR: {
+                if (clickedInv == top) {
+                    ItemStack cursor = event.getCursor();
+                    if (cursor != null && cursor.getType() != Material.AIR && SackItem.getSackType(cursor) == null) {
+                        event.setCancelled(true);
+                        player.sendMessage(ChatColor.RED + "Only sacks can go in the bag!");
+                    }
+                }
+                break;
+            }
+            case MOVE_TO_OTHER_INVENTORY: {
+                // Shift-click FROM the player's own inventory INTO the bag
+                if (clickedInv != null && clickedInv != top) {
+                    ItemStack current = event.getCurrentItem();
+                    if (current != null && SackItem.getSackType(current) == null) {
+                        event.setCancelled(true);
+                        player.sendMessage(ChatColor.RED + "Only sacks can go in the bag!");
+                    }
+                }
+                break;
+            }
+            case HOTBAR_SWAP:
+            case HOTBAR_MOVE_AND_READD: {
+                if (clickedInv == top) {
+                    int hotbarButton = event.getHotbarButton();
+                    ItemStack hotbarItem = hotbarButton >= 0 ? player.getInventory().getItem(hotbarButton) : null;
+                    if (hotbarItem != null && hotbarItem.getType() != Material.AIR && SackItem.getSackType(hotbarItem) == null) {
+                        event.setCancelled(true);
+                        player.sendMessage(ChatColor.RED + "Only sacks can go in the bag!");
+                    }
+                }
+                break;
+            }
+            default:
+                break;
+        }
+    }
+
+    @EventHandler(priority = EventPriority.HIGHEST)
+    public void onBagDrag(InventoryDragEvent event) {
+        if (!(event.getWhoClicked() instanceof Player player)) return;
+        Inventory top = event.getView().getTopInventory();
+        if (!(top.getHolder() instanceof BagOfSacks.BagHolder)) return;
+        if (SackItem.getSackType(event.getOldCursor()) != null) return;
+        int topSize = top.getSize();
+        for (int slot : event.getRawSlots()) {
+            if (slot < topSize) {
+                event.setCancelled(true);
+                player.sendMessage(ChatColor.RED + "Only sacks can go in the bag!");
                 return;
             }
-            // Store it
-            SacksPlugin.getInstance().getBagOfSacks().storeSack(player.getUniqueId(), type);
-            clicked.setAmount(clicked.getAmount() - 1);
-            player.sendMessage(type.getColor() + "✔ " + type.getDisplayName() + org.bukkit.ChatColor.GREEN + " stored in your bag!");
-            plugin.getServer().getScheduler().runTaskLater(plugin, () ->
-                player.openInventory(SacksPlugin.getInstance().getBagOfSacks().buildGUI(player)), 1L);
-            return;
         }
+    }
 
-        // Handle clicks in bag GUI — taking sack out
-        ItemStack clicked = event.getCurrentItem();
-        if (clicked == null) return;
-        SackType type = SackItem.getSackType(clicked);
-        if (type == null) return; // clicked placeholder or filler
-        // Give sack back to player
-        SacksPlugin.getInstance().getBagOfSacks().removeSack(player.getUniqueId(), type);
-        player.getInventory().addItem(SackItem.create(type, player.getUniqueId()));
-        player.sendMessage(type.getColor() + "✔ " + type.getDisplayName() + org.bukkit.ChatColor.GREEN + " removed from bag!");
-        plugin.getServer().getScheduler().runTaskLater(plugin, () ->
-            player.openInventory(SacksPlugin.getInstance().getBagOfSacks().buildGUI(player)), 1L);
+    @EventHandler
+    public void onBagClose(InventoryCloseEvent event) {
+        if (!(event.getPlayer() instanceof Player player)) return;
+        if (!(event.getInventory().getHolder() instanceof BagOfSacks.BagHolder)) return;
+        SacksPlugin.getInstance().getBagOfSacks().saveFromInventory(player.getUniqueId(), event.getInventory());
     }
 
     private void showActionBar(Player player, SackType type, Material mat, int amount) {
@@ -265,8 +307,8 @@ public class SackListener implements Listener {
         for (ItemStack item : player.getInventory().getContents()) {
             if (SackItem.getSackType(item) == type) return true;
         }
-        // Also check bag
-        return SacksPlugin.getInstance().getBagOfSacks().hasSackInBag(player.getUniqueId(), type);
+        // Sacks stored in the Bag of Sacks still passively collect
+        return SacksPlugin.getInstance().getBagOfSacks().hasSackOfType(player.getUniqueId(), type);
     }
     private int countFit(Player player, Material mat, int wanted) {
         int space = 0;
@@ -284,4 +326,3 @@ public class SackListener implements Listener {
         return sb.toString().trim();
     }
 }
-// BAG_APPEND_MARKER
